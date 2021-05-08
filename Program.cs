@@ -12,34 +12,18 @@ namespace Charts {
         private static string bakFile;
         private static string csvFile;
         private static string dirPath;
+        private static string emaFile;
         private static string floatFile;
         private static string pointFile;
         private static string reportFile;
         private static string scaleFile;
+        private static string volFile;
         private static string [] tickers;
 
         public static string currentTicker = string.Empty;
 
         public static void Main (string[] args) {
             ProcessMultipleTickers ();
-        }
-
-        private static List<DailyFloatData> AddToReport (this List<DailyFloatData> values, ref DailyReport report) {
-            DailyFloatData last = values.Last ();
-            report.Buy = last.High;
-            report.FloatSignal = last.Signal;
-            report.Sell = last.Low;
-            return values;
-        }
-
-        private static List<DailyPointData> AddToReport (this List<DailyPointData> values, ref DailyReport report) {
-            DailyPointData last = values.Last ();
-            report.Close = last.Close;
-            report.Date = last.Date;
-            report.HighLow = last.HighLow;
-            report.PointSignal = last.Signal;
-            report.Reversal = last.Target;
-            return values;
         }
 
         private static Result<string, Exception> IsValidFile (this string filePath) {
@@ -58,21 +42,8 @@ namespace Charts {
             }
         }
 
-        public static List<DailyReport> OutputReportAsCsv (this List<DailyReport> values, string filePath) {
-            try {
-                using StreamWriter file = new StreamWriter (filePath);
-                file.WriteLine ("Ticker,Date,Close,Point Signal,High/Low,Reversal,Float Signal,Buy,Sell");
-                foreach (DailyReport value in values) {
-                    file.WriteLine (value.ToCsv ());
-                }
-            }
-            catch (Exception ex) {
-                Utils.WriteToConsole ($"{Utils.ExToString (ex)} {Program.currentTicker}", true, "OutputReportAsCsv");
-            }
-            return values;
-        }
-
         private static void ProcessMultipleTickers () {
+            int maNumDays1 = 20, maNumDays2 = 120;
             try {
                 var appSettings = ConfigurationManager.AppSettings;
                 if (System.Environment.OSVersion.Platform == PlatformID.Unix) {
@@ -85,34 +56,45 @@ namespace Charts {
                 tickers = tickersValue.Split (',');
                 // tickets = new string [] { 'ABBV' };
 
-                List<DailyReport> reports = new List<DailyReport> (tickers.Length);
+                DailyReport report = new (maNumDays1, maNumDays2);
                 reportFile = $"{dirPath}{DateTime.Now:yyyy-MM-dd}-report.csv";
 
                 foreach (string ticker in tickers) {
                     currentTicker = ticker;
-                    DailyReport report = new DailyReport ();
-                    report.Ticker = ticker;
+                    DailyReportData data = new ();
+                    data.Ticker = ticker;
 
                     csvFile = $"{dirPath}{ticker}.csv".IsValidFile ().Success;
                     bakFile = $"{dirPath}{ticker}-bak.csv";
                     floatFile = $"{dirPath}{ticker}-float.csv";
                     pointFile = $"{dirPath}{ticker}-point.csv";
                     scaleFile = $"{dirPath}{ticker}-scale.csv";
+                    emaFile = $"{dirPath}{ticker}-ema.csv";
+                    volFile = $"{dirPath}{ticker}-vol.csv";
 
                     List<DailyStockData> stockValues = csvFile.ReadStockFile ().Success;
 
                     long flt = Convert.ToInt64 (appSettings [ticker]);
                     DailyFloatList flist = new DailyFloatList (stockValues, flt);
                     flist.OutputAsCsv (floatFile);
-                    flist.AddToReport (ref report);
+                    data.AddToReport (flist);
 
                     DailyPointList plist = new DailyPointList (stockValues);
                     plist.OutputAsCsv (pointFile);
-                    plist.AddToReport (ref report);
+                    data.AddToReport (plist);
 
-                    reports.Add (report);
+                    ExponentialAverageList emaList = new(stockValues, ticker, maNumDays1, maNumDays2);
+                    emaList.OutputAsCsv(emaFile);
+                    data.AddToReport(emaList);
+
+                    DailyVolumeList dvlist = new (stockValues, ticker);
+                    AverageVolumeList vlist = new AverageVolumeList(dvlist, ticker, maNumDays1);
+                    vlist.OutputAsCsv(volFile);
+                    data.AddToReport(vlist);
+
+                    report.Add (data);
                 }
-                reports.OutputReportAsCsv (reportFile);
+                report.OutputAsCsv (reportFile);
             }
             catch (Exception ex) {
                 Utils.WriteToConsole ($"{Utils.ExToString (ex)} {currentTicker}", true, "Main");
