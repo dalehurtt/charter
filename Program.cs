@@ -54,7 +54,7 @@ namespace Charts {
                 }
                 string tickersValue = appSettings ["tickers"];
                 tickers = tickersValue.Split (',');
-                // tickets = new string [] { 'ABBV' };
+                // tickers = new string [] { 'ABBV' };
 
                 DailyReport report = new (maNumDays1, maNumDays2);
                 reportFile = $"{dirPath}{DateTime.Now:yyyy-MM-dd}-report.csv";
@@ -75,11 +75,11 @@ namespace Charts {
                     List<DailyStockData> stockValues = csvFile.ReadStockFile ().Success;
 
                     long flt = Convert.ToInt64 (appSettings [ticker]);
-                    DailyFloatList flist = new DailyFloatList (stockValues, flt);
+                    DailyFloatList flist = new DailyFloatList (stockValues, flt, ticker);
                     flist.OutputAsCsv (floatFile);
                     data.AddToReport (flist);
 
-                    DailyPointList plist = new DailyPointList (stockValues);
+                    DailyPointList plist = new DailyPointList (stockValues, ticker);
                     plist.OutputAsCsv (pointFile);
                     data.AddToReport (plist);
 
